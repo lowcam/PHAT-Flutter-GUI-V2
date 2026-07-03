@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import '../constants.dart';
 
+/// A custom-drawn logo representing a padlock and a skeleton key.
+/// Created using a [Stack] of [Container]s and [BoxDecoration]s for vector-like scalability.
 class AppLogo extends StatelessWidget {
+  /// The size (width and height) of the logo.
   final double size;
+  /// Optional color override. Defaults to the theme's primary color.
   final Color? color;
 
   const AppLogo({
@@ -13,20 +16,23 @@ class AppLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logoColor = color ?? AppConstants.primaryAccent;
+    final theme = Theme.of(context);
+    final logoColor = color ?? theme.colorScheme.primary;
+    final backgroundColor = theme.scaffoldBackgroundColor;
+
     return SizedBox(
       width: size,
       height: size,
       child: Stack(
         children: [
-          // Background Circle
+          // Background Circle - the main "coin" or button background
           Container(
             decoration: BoxDecoration(
               color: logoColor,
               shape: BoxShape.circle,
             ),
           ),
-          // Padlock Shackle
+          // Padlock Shackle - the curved top part of the lock
           Positioned(
             top: size * 0.15,
             left: size * 0.3,
@@ -34,7 +40,7 @@ class AppLogo extends StatelessWidget {
             bottom: size * 0.45,
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: AppConstants.scaffoldBgColor, width: size * 0.08),
+                border: Border.all(color: backgroundColor, width: size * 0.08),
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(size * 0.3),
                   topRight: Radius.circular(size * 0.3),
@@ -42,7 +48,7 @@ class AppLogo extends StatelessWidget {
               ),
             ),
           ),
-          // Padlock Body
+          // Padlock Body - the rectangular base of the lock
           Positioned(
             top: size * 0.4,
             left: size * 0.22,
@@ -50,11 +56,11 @@ class AppLogo extends StatelessWidget {
             bottom: size * 0.2,
             child: Container(
               decoration: BoxDecoration(
-                color: AppConstants.scaffoldBgColor,
+                color: backgroundColor,
                 borderRadius: BorderRadius.circular(size * 0.1),
               ),
               child: Center(
-                // Keyhole
+                // Keyhole - represented by a small circular dot
                 child: Container(
                   width: size * 0.12,
                   height: size * 0.12,
@@ -66,7 +72,7 @@ class AppLogo extends StatelessWidget {
               ),
             ),
           ),
-          // Keyhole extension
+          // Keyhole extension - the vertical part of the keyhole
           Positioned(
             top: size * 0.55,
             left: size * 0.46,
@@ -74,7 +80,7 @@ class AppLogo extends StatelessWidget {
             height: size * 0.1,
             child: Container(color: logoColor),
           ),
-          // Skeleton Key handle
+          // Skeleton Key handle - decorative circle for the key
           Positioned(
             right: size * 0.15,
             top: size * 0.55,
@@ -87,7 +93,7 @@ class AppLogo extends StatelessWidget {
               ),
             ),
           ),
-          // Skeleton Key shaft
+          // Skeleton Key shaft - the bit/blade of the key
           Positioned(
             right: size * 0.2,
             top: size * 0.68,

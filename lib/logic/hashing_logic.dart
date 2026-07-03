@@ -1,113 +1,108 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:convert/convert.dart';
 import 'package:fast_base58/fast_base58.dart';
 import 'package:cryptography/cryptography.dart' as crypto_pkg;
+import '../constants.dart';
 
+/// Data class using [Uint8List] for sensitive data to allow memory wiping.
+class HashParams {
+  final Uint8List userText;
+  final HashAlgorithm algorithm;
+  final Uint8List salt;
+  final int argon2Iterations;
+  final int argon2Memory;
+  final int argon2Parallelism;
+  final int pbkdf2Iterations;
+
+  HashParams({
+    required this.userText,
+    required this.algorithm,
+    required this.salt,
+    required this.argon2Iterations,
+    required this.argon2Memory,
+    required this.argon2Parallelism,
+    required this.pbkdf2Iterations,
+  });
+
+  /// Explicitly wipes sensitive byte arrays from memory.
+  void wipe() {
+    userText.fillRange(0, userText.length, 0);
+    salt.fillRange(0, salt.length, 0);
+  }
+}
+
+/// Core logic for cryptographic hashing with memory-hardening patterns.
 class HashingLogic {
-  static Future<String> hashInput({
-    required String userText,
-    required String? algorithm,
-    String salt = '',
-    int argon2Iterations = 3,
-    int argon2Memory = 65536,
-    int argon2Parallelism = 4,
-    int pbkdf2Iterations = 100000,
-  }) async {
+  
+  /// Computes the hash and wipes the input parameters immediately after use.
+  static Future<Uint8List> hashInput(HashParams params) async {
     try {
-      var bytes = utf8.encode(userText);
-      var saltBytes = utf8.encode(salt);
-
-      if (algorithm == '256') {
-        return sha256.convert(bytes).toString();
-      } else if (algorithm == '384') {
-        return sha384.convert(bytes).toString();
-      } else if (algorithm == '512') {
-        return sha512.convert(bytes).toString();
-      } else if (algorithm == 'Argon2id') {
-        final kdf = crypto_pkg.Argon2id(
-          iterations: argon2Iterations,
-          memory: argon2Memory,
-          parallelism: argon2Parallelism,
-          hashLength: 32,
-        );
-        final secretKey = crypto_pkg.SecretKey(bytes);
-        final key = await kdf.deriveKey(
-          secretKey: secretKey,
-          nonce: saltBytes,
-        );
-        final keyBytes = await key.extractBytes();
-        return hex.encode(keyBytes);
-      } else if (algorithm == 'PBKDF2') {
-        final kdf = crypto_pkg.Pbkdf2(
-          macAlgorithm: crypto_pkg.Hmac.sha256(),
-          iterations: pbkdf2Iterations,
-          bits: 256,
-        );
-        final secretKey = crypto_pkg.SecretKey(bytes);
-        final key = await kdf.deriveKey(
-          secretKey: secretKey,
-          nonce: saltBytes,
-        );
-        final keyBytes = await key.extractBytes();
-        return hex.encode(keyBytes);
+      final Uint8List result;
+      switch (params.algorithm) {
+        case HashAlgorithm.sha256:
+          result = Uint8List.fromList(sha256.convert(params.userText).bytes);
+          break;
+        case HashAlgorithm.sha384:
+          result = Uint8List.fromList(sha384.convert(params.userText).bytes);
+          break;
+        case HashAlgorithm.sha512:
+          result = Uint8List.fromList(sha512.convert(params.userText).bytes);
+          break;
+        case HashAlgorithm.argon2id:
+          if (params.salt.length < AppConstants.minSaltLength) {
+            throw Exception("Salt must be at least ${AppConstants.minSaltLength} characters.");
+          }
+          final kdf = crypto_pkg.Argon2id(
+            iterations: params.argon2Iterations,
+            memory: params.argon2Memory,
+            parallelism: params.argon2Parallelism,
+            hashLength: 32,
+          );
+          final secretKey = crypto_pkg.SecretKey(params.userText);
+          final key = await kdf.deriveKey(secretKey: secretKey, nonce: params.salt);
+          result = Uint8List.fromList(await key.extractBytes());
+          break;
+        case HashAlgorithm.pbkdf2:
+          if (params.salt.length < AppConstants.minSaltLength) {
+            throw Exception("Salt must be at least ${AppConstants.minSaltLength} characters.");
+          }
+          final kdf = crypto_pkg.Pbkdf2(
+            macAlgorithm: crypto_pkg.Hmac.sha256(),
+            iterations: params.pbkdf2Iterations,
+            bits: 256,
+          );
+          final secretKey = crypto_pkg.SecretKey(params.userText);
+          final key = await kdf.deriveKey(secretKey: secretKey, nonce: params.salt);
+          result = Uint8List.fromList(await key.extractBytes());
+          break;
       }
-      return "Error: Unknown algorithm";
-    } catch (e) {
-      return "Error: Unable to hash input. $e";
+      return result;
+    } finally {
+      // Memory Hardening: Wipe sensitive inputs in the worker isolate
+      params.wipe();
     }
   }
 
-  static String numberSystemConvert(String? userNumSys, String convHashText) {
-    try {
-      if (convHashText.startsWith("Error")) return convHashText;
-      List<int> bytes = hex.decode(convHashText);
-      if (userNumSys == 'Hex') {
-        return convHashText;
-      } else if (userNumSys == 'Base64') {
-        return base64.encode(bytes);
-      } else {
-        return Base58Encode(bytes);
-      }
-    } catch (e) {
-      return "Error: Number system conversion failed.";
+  static String formatBytes(Uint8List bytes, NumberSystem numSystem) {
+    switch (numSystem) {
+      case NumberSystem.hex: return hex.encode(bytes);
+      case NumberSystem.base64: return base64.encode(bytes);
+      case NumberSystem.base58: return Base58Encode(bytes);
     }
   }
 
-  static String finalOutputText(String convertedText, double outputDigits) {
-    try {
-      if (convertedText.startsWith("Error")) return convertedText;
-      int outputDigitsInt = outputDigits.round();
-      if (outputDigitsInt == 0) {
-        return convertedText;
-      } else {
-        int stringLength = convertedText.length;
-        if (stringLength <= outputDigitsInt) {
-          return convertedText;
-        } else {
-          return convertedText.substring(0, outputDigitsInt);
-        }
-      }
-    } catch (e) {
-      return convertedText;
-    }
+  static String truncateOutput(String text, double outputDigits) {
+    int digits = outputDigits.round();
+    if (digits == 0 || text.length <= digits) return text;
+    return text.substring(0, digits);
   }
 
-  static double calculateEntropy(String text, String? numSystem) {
-    if (text.isEmpty || text == 'Output will appear here' || text.startsWith("Error")) return 0;
-
-    int poolSize = 0;
-    if (numSystem == 'Hex') {
-      poolSize = 16;
-    } else if (numSystem == 'Base64') {
-      poolSize = 64;
-    } else if (numSystem == 'Base58') {
-      poolSize = 58;
-    } else {
-      poolSize = 16;
-    }
-
+  static double calculateEntropy(String text, NumberSystem numSystem) {
+    if (text.isEmpty || text == 'Output will appear here' || text.startsWith('Error')) return 0;
+    int poolSize = (numSystem == NumberSystem.hex) ? 16 : (numSystem == NumberSystem.base64 ? 64 : 58);
     return text.length * (log(poolSize) / log(2));
   }
 }

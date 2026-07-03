@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../constants.dart';
 
+/// A styled [Card] component with consistent rounded corners and padding.
+/// Used for grouping sections in the main UI.
 class PHATCard extends StatelessWidget {
   final Widget child;
   final double elevation;
@@ -17,9 +18,11 @@ class PHATCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
       elevation: elevation,
-      color: color ?? AppConstants.cardColor,
+      // Use the provided color, or fallback to the theme's card color (surface)
+      color: color ?? theme.cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: padding!,
@@ -29,6 +32,7 @@ class PHATCard extends StatelessWidget {
   }
 }
 
+/// A small, bold, uppercase label used to header different sections of the UI.
 class SectionLabel extends StatelessWidget {
   final String label;
   final Color? color;
@@ -37,12 +41,14 @@ class SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Text(
       label,
       style: TextStyle(
         fontWeight: FontWeight.w800,
         fontSize: 12,
-        color: (color ?? AppConstants.primaryAccent).withOpacity(0.7),
+        // Default to the theme's primary color if no color is provided
+        color: (color ?? theme.colorScheme.primary).withOpacity(0.7),
         letterSpacing: 1.5,
       ),
     );
